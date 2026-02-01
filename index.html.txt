@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Il Palio di Siena - Simulazione Storica</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+        body { font-family: 'Lora', serif; background-color: #1a0d07; color: #fdfaf3; margin: 0; overflow-x: hidden; height: 100vh; }
+        .font-palio { font-family: 'Cinzel', serif; }
+        .piazza-sand { 
+            background-color: #c59664; 
+            background-image: url('https://www.transparenttextures.com/patterns/piazza-tiles.png');
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
+        }
+        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; opacity: 1; transform: translateY(0); } }
+        .track-container {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .track-svg { width: 100%; height: auto; display: block; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        const CONTRADE = [
+            { id: 'aq', name: "Aquila", colors: ["#0000FF", "#000000", "#FFD700", "#FFD700", "#000000", "#0000FF"], emoji: "🦅" },
+            { id: 'br', name: "Bruco", colors: ["#0000FF", "#FFD700", "#FFD700", "#008000", "#008000", "#0000FF"], emoji: "🐛" },
+            { id: 'ch', name: "Chiocciola", colors: ["#0000FF", "#FFD700", "#FFD700", "#FF0000", "#FF0000", "#0000FF"], emoji: "🐌" },
+            { id: 'cv', name: "Civetta", colors: ["#FFFFFF", "#FF0000", "#FF0000", "#000000", "#000000", "#FFFFFF"], emoji: "🦉" },
+            { id: 'dr', name: "Drago", colors: ["#FFD700", "#008000", "#008000", "#FF0000", "#FF0000", "#FFD700"], emoji: "🐉" },
+            { id: 'gi', name: "Giraffa", colors: ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FF0000", "#FF0000", "#FF0000"], emoji: "🦒" },
+            { id: 'is', name: "Istrice", colors: ["#FFFFFF", "#0000FF", "#FFFFFF", "#FF0000", "#FFFFFF", "#000000"], emoji: "🦔" },
+            { id: 'le', name: "Leocorno", colors: ["#0000FF", "#FFFFFF", "#FFFFFF", "#FFA500", "#FFA500", "#0000FF"], emoji: "🦄" },
+            { id: 'lu', name: "Lupa", colors: ["#FFA500", "#FFFFFF", "#FFFFFF", "#000000", "#000000", "#FFA500"], emoji: "🐺" },
+            { id: 'ni', name: "Nicchio", colors: ["#FFD700", "#FF0000", "#0000FF", "#0000FF", "#FF0000", "#FFD700"], emoji: "🐚" },
+            { id: 'oc', name: "Oca", colors: ["#FF0000", "#008000", "#008000", "#FFFFFF", "#FFFFFF", "#FF0000"], emoji: "🦆" },
+            { id: 'on', name: "Onda", colors: ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#87CEEB", "#87CEEB", "#87CEEB"], emoji: "🌊" },
+            { id: 'pa', name: "Pantera", colors: ["#FFFFFF", "#0000FF", "#0000FF", "#FF0000", "#FF0000", "#FFFFFF"], emoji: "🐆" },
+            { id: 'se', name: "Selva", colors: ["#FFFFFF", "#FFA500", "#FFA500", "#008000", "#008000", "#FFFFFF"], emoji: "🌳" },
+            { id: 'ta', name: "Tartuca", colors: ["#FFD700", "#FFD700", "#FFD700", "#0000FF", "#0000FF", "#0000FF"], emoji: "🐢" },
+            { id: 'to', name: "Torre", colors: ["#0000FF", "#FFFFFF", "#8B4513", "#8B4513", "#FFFFFF", "#0000FF"], emoji: "🏰" },
+            { id: 'va', name: "Valdimontone", colors: ["#FFFFFF", "#FFD700", "#FFD700", "#FF0000", "#FF0000", "#FFFFFF"], emoji: "🐏" }
+        ];
+
+        const FANTINI = ["Tittia", "Gingillo", "Scompiglio", "Brio", "Trecciolino", "Amsicora", "Brigante", "Turbine", "Tempesta", "Scangeo"];
+
+        // Funzione per ottenere la stringa del gradiente CSS in base alla contrada
+        const getFlagGradient = (contrada) => {
+            const colors = contrada.colors;
+            if (contrada.id === 'is') {
+                const step = 100 / colors.length;
+                return `linear-gradient(to right, ${colors.map((c, i) => `${c} ${i * step}%, ${c} ${(i + 1) * step}%`).join(', ')})`;
+            }
+            
+            const c1 = colors[0];
+            const c2 = colors[1];
+            const cn = colors[colors.length - 2];
+            const cl = colors[colors.length - 1];
+            const middle = colors.slice(2, -2);
+            const middleCount = middle.length || 1;
+            const middleStep = 72 / middleCount;
+            
+            let parts = [`${c1} 0%, ${c1} 7%`, `${c2} 7%, ${c2} 14%`];
+            if (middle.length > 0) {
+                middle.forEach((color, i) => {
+                    parts.push(`${color} ${14 + (i * middleStep)}%, ${color} ${14 + ((i + 1) * middleStep)}%`);
+                });
+            } else {
+                parts.push(`${cn} 14%, ${cn} 86%`);
+            }
+            parts.push(`${cn} 86%, ${cn} 93%`, `${cl} 93%, ${cl} 100%`);
+            return `linear-gradient(to right, ${parts.join(', ')})`;
+        };
+
+        function App() {
+            const [year, setYear] = useState(2026);
+            const [palioType, setPalioType] = useState('Luglio');
+            const [history, setHistory] = useState({ Luglio: [], Agosto: [] });
+            const [alboDOro, setAlboDOro] = useState([]);
+            const [step, setStep] = useState('menu');
+            const [participants, setParticipants] = useState([]);
+            const [luckyDraw, setLuckyDraw] = useState([]);
+            const [horses, setHorses] = useState({});
+            const [jockeys, setJockeys] = useState({});
+            const [racingSet, setRacingSet] = useState([]);
+            const [isRacing, setIsRacing] = useState(false);
+            const [winner, setWinner] = useState(null);
+            const requestRef = useRef();
+
+            const startPalio = (type) => {
+                const lastYearContrade = history[type] || [];
+                let selected = [];
+                let extras = [];
+
+                if (lastYearContrade.length === 0) {
+                    selected = [...CONTRADE].sort(() => 0.5 - Math.random()).slice(0, 10);
+                    extras = selected;
+                } else {
+                    const rights = CONTRADE.filter(c => !lastYearContrade.includes(c.id)).slice(0, 7);
+                    const remaining = CONTRADE.filter(c => !rights.some(r => r.id === c.id));
+                    extras = remaining.sort(() => 0.5 - Math.random()).slice(0, 3);
+                    selected = [...rights, ...extras];
+                }
+                setParticipants(selected);
+                setLuckyDraw(extras);
+                setStep('draw_results');
+            };
+
+            const assignHorses = () => {
+                const h = {};
+                participants.forEach(p => h[p.id] = Math.floor(Math.random() * 5) + 1);
+                setHorses(h);
+                setStep('tratta_horses');
+            };
+
+            const assignJockeys = () => {
+                const j = {};
+                const availableNames = [...FANTINI].sort(() => 0.5 - Math.random());
+                participants.forEach((p, idx) => {
+                    j[p.id] = { name: availableNames[idx] || "Fantino", skill: Math.floor(Math.random() * 5) + 1 };
+                });
+                setJockeys(j);
+                setStep('tratta_jockeys');
+            };
+
+            const setupRace = () => {
+                const data = participants.map((p, i) => ({
+                    ...p, progress: 0, laps: 0, lane: i, isScosso: false,
+                    baseSpeed: 0.00045 + (horses[p.id] * 0.00004) + (jockeys[p.id].skill * 0.00001)
+                }));
+                setRacingSet(data);
+                setStep('race');
+                setIsRacing(false);
+                setWinner(null);
+            };
+
+            const update = useCallback(() => {
+                if (!isRacing) return;
+                setRacingSet(prev => {
+                    let win = null;
+                    const next = prev.map(c => {
+                        if (c.laps >= 3) return c;
+                        let s = c.baseSpeed + (Math.random() - 0.48) * 0.00022;
+                        const inCurve = (c.progress > 0.3 && c.progress < 0.45) || (c.progress > 0.8 && c.progress < 0.95);
+                        if (inCurve) {
+                            s *= 0.72;
+                            if (!c.isScosso && Math.random() > 0.9997) c.isScosso = true;
+                        }
+                        if (c.isScosso) s *= 1.05;
+                        let nP = c.progress + s;
+                        let nL = c.laps;
+                        if (nP >= 1) { nP = 0; nL++; }
+                        if (nL >= 3 && !win) win = c;
+                        return { ...c, progress: nP, laps: nL };
+                    });
+
+                    if (win) {
+                        setWinner(win);
+                        setIsRacing(false);
+                        setAlboDOro(prevAlbo => [{ year, type: palioType, winner: win }, ...prevAlbo]);
+                        setHistory(prevH => ({ ...prevH, [palioType]: participants.map(p => p.id) }));
+                    }
+                    return next;
+                });
+                requestRef.current = requestAnimationFrame(update);
+            }, [isRacing, year, palioType, participants]);
+
+            useEffect(() => {
+                if (isRacing) requestRef.current = requestAnimationFrame(update);
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [isRacing, update]);
+
+            const getPos = (progress, lane) => {
+                const angle = progress * Math.PI * 2 - Math.PI / 2;
+                // Raggi ulteriormente ridotti per garantire visibilità nell'SVG 500x400
+                const rx = 165 + (lane * 6);
+                const ry = 115 + (lane * 4.5); 
+                return {
+                    x: 250 + (rx * Math.cos(angle)), 
+                    y: 200 + (ry * Math.sin(angle)) 
+                };
+            };
+
+            return (
+                <div className="flex-1 flex flex-col items-center p-3 overflow-y-auto">
+                    <div className="w-full max-w-xl bg-black/80 p-4 rounded-3xl border border-yellow-900/40 flex justify-between items-center mb-4 shadow-xl shrink-0">
+                        <div>
+                            <h1 className="text-2xl font-palio font-black text-yellow-500 italic leading-none">{year}</h1>
+                            <p className="text-[10px] uppercase tracking-widest text-white/50">Carriera di {palioType}</p>
+                        </div>
+                        <button onClick={() => setStep('albo')} className="bg-yellow-900/40 px-3 py-1.5 rounded-xl border border-yellow-600/20 text-[9px] font-bold uppercase">Albo d'Oro</button>
+                    </div>
+
+                    {step === 'menu' && (
+                        <div className="flex flex-col gap-6 w-full max-w-xs mt-10 animate-in text-center">
+                            <h3 className="text-xl font-black uppercase text-yellow-600 italic tracking-widest">{palioType === 'Luglio' ? '2 Luglio' : '16 Agosto'} {year}</h3>
+                            <button onClick={() => startPalio(palioType)} className="p-12 bg-red-950 border-2 border-yellow-700 rounded-[50px] shadow-2xl hover:scale-105 transition">
+                                <span className="text-3xl block font-palio font-black">SORTEGGIO</span>
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'draw_results' && (
+                        <div className="w-full max-w-lg animate-in">
+                            <div className="grid grid-cols-2 gap-2 mb-6">
+                                {participants.map(c => (
+                                    <div key={c.id} style={{ background: getFlagGradient(c) }} className="p-3 rounded-xl shadow-lg flex items-center gap-2 relative border border-black/10">
+                                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xl shrink-0">{c.emoji}</div>
+                                        <span className="font-black uppercase text-[10px] text-black bg-white/80 px-2 rounded truncate">{c.name}</span>
+                                        {luckyDraw.some(l => l.id === c.id) && <div className="absolute top-0 right-1 text-[7px] font-bold text-red-900 italic">Estratta</div>}
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={assignHorses} className="w-full py-4 bg-yellow-600 text-black font-black rounded-2xl uppercase font-palio shadow-lg">Assegnazione Cavalli</button>
+                        </div>
+                    )}
+
+                    {step === 'tratta_horses' && (
+                        <div className="w-full max-w-sm animate-in space-y-2">
+                            {participants.map(c => (
+                                <div key={c.id} style={{ background: getFlagGradient(c) }} className="p-3 rounded-xl flex justify-between items-center shadow border border-black/10">
+                                    <span className="font-black uppercase text-[10px] text-black bg-white/80 px-2 rounded">{c.name}</span>
+                                    <span className="text-lg bg-white/90 px-2 rounded-lg">{'🐎'.repeat(horses[c.id])}</span>
+                                </div>
+                            ))}
+                            <button onClick={assignJockeys} className="w-full mt-4 py-4 bg-red-800 text-white font-black rounded-2xl uppercase font-palio">Segnatura Fantini</button>
+                        </div>
+                    )}
+
+                    {step === 'tratta_jockeys' && (
+                        <div className="w-full max-w-sm animate-in space-y-1.5">
+                            {participants.map(c => (
+                                <div key={c.id} style={{ background: getFlagGradient(c) }} className="p-2.5 rounded-xl border border-black/10 flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-xl bg-white p-1 rounded-full">{c.emoji}</div>
+                                        <div className="bg-white/80 p-1 rounded-md">
+                                            <div className="font-black uppercase text-[9px] text-black leading-tight">{c.name}</div>
+                                            <div className="text-[8px] text-red-900 font-bold">{jockeys[c.id].name.toUpperCase()}</div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-black text-white px-2 py-0.5 rounded-full font-mono text-[9px]">{(horses[c.id] + jockeys[c.id].skill)/2} ★</div>
+                                </div>
+                            ))}
+                            <button onClick={setupRace} className="w-full mt-4 py-5 bg-yellow-600 text-black font-black rounded-2xl uppercase font-palio">Vai in Piazza</button>
+                        </div>
+                    )}
+
+                    {step === 'race' && (
+                        <div className="w-full flex flex-col items-center">
+                            <div className="h-6 mb-2 text-yellow-500 font-black italic text-xs uppercase tracking-widest shrink-0">
+                                {!isRacing && !winner ? "Attesa della Mossa..." : winner ? "PALIO FINITO" : "CORSA IN CORSO"}
+                            </div>
+                            
+                            <div className="track-container shrink-0">
+                                <div className="piazza-sand rounded-[40px] border-4 border-[#3a2215] overflow-hidden">
+                                    <svg viewBox="0 0 500 400" className="track-svg">
+                                        <ellipse cx="250" cy="200" rx="200" ry="140" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="45" />
+                                        
+                                        {racingSet.map((c, i) => {
+                                            const pos = getPos(c.progress, i);
+                                            // Definiamo i gradienti per le bandierine della gara usando i defs
+                                            return (
+                                                <g key={c.id} transform={`translate(${pos.x}, ${pos.y})`}>
+                                                    <defs>
+                                                        <linearGradient id={`grad-${c.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                                            {/* Stessa logica della home: Istrice uniforme, altri bordi sottili */}
+                                                            {c.id === 'is' ? (
+                                                                c.colors.map((color, idx) => (
+                                                                    <React.Fragment key={idx}>
+                                                                        <stop offset={`${(idx * 100) / 6}%`} stopColor={color} />
+                                                                        <stop offset={`${((idx + 1) * 100) / 6}%`} stopColor={color} />
+                                                                    </React.Fragment>
+                                                                ))
+                                                            ) : (
+                                                                <>
+                                                                    <stop offset="0%" stopColor={c.colors[0]} />
+                                                                    <stop offset="7%" stopColor={c.colors[0]} />
+                                                                    <stop offset="7%" stopColor={c.colors[1]} />
+                                                                    <stop offset="14%" stopColor={c.colors[1]} />
+                                                                    <stop offset="14%" stopColor={c.colors[2]} />
+                                                                    <stop offset="86%" stopColor={c.colors[c.colors.length-3]} />
+                                                                    <stop offset="86%" stopColor={c.colors[c.colors.length-2]} />
+                                                                    <stop offset="93%" stopColor={c.colors[c.colors.length-2]} />
+                                                                    <stop offset="93%" stopColor={c.colors[c.colors.length-1]} />
+                                                                    <stop offset="100%" stopColor={c.colors[c.colors.length-1]} />
+                                                                </>
+                                                            )}
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <circle r="8" fill="black" opacity="0.1" transform="translate(1, 1)" />
+                                                    <g transform="translate(0, -18)">
+                                                        <rect x="-0.3" y="0" width="0.6" height="10" fill="#333" />
+                                                        <rect x="0.3" y="0" width="8" height="5" fill={`url(#grad-${c.id})`} stroke="white" strokeWidth="0.1" />
+                                                    </g>
+                                                    <circle r="7.5" fill={c.colors[2] || c.colors[0]} stroke="#fff" strokeWidth="1" />
+                                                    <text fontSize="9" dy="3" textAnchor="middle" className="select-none">{c.isScosso ? '🐎' : '🏇'}</text>
+                                                </g>
+                                            );
+                                        })}
+                                        <line x1="250" y1="20" x2="250" y2="70" stroke="white" strokeWidth="2" strokeDasharray="3" opacity="0.6" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            {!isRacing && !winner && (
+                                <button onClick={() => setIsRacing(true)} className="w-full max-w-xs mt-6 py-5 bg-red-800 text-white font-black text-2xl rounded-2xl shadow-xl uppercase font-palio">Mossa!</button>
+                            )}
+
+                            <div className="w-full max-w-sm mt-4 bg-black/60 p-3 rounded-xl border border-yellow-900/30">
+                                {[...racingSet].sort((a,b) => (b.laps + b.progress) - (a.laps + a.progress)).slice(0, 3).map((c, i) => (
+                                    <div key={c.id} className="flex justify-between items-center py-1 text-[10px] font-bold uppercase">
+                                        <span>{i+1}. {c.emoji} {c.name} {c.isScosso && "(Scosso)"}</span>
+                                        <div className="flex gap-1">
+                                            {[1,2,3].map(g => <div key={g} className={`w-2 h-2 rounded-full ${c.laps >= g ? 'bg-yellow-500' : 'bg-white/10'}`}></div>)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {winner && (
+                        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-8 text-center animate-in">
+                            <div className="text-yellow-500 font-palio text-[10px] tracking-[0.4em] mb-4 uppercase italic">Siena trionfa!</div>
+                            <div className="text-9xl mb-4 drop-shadow-2xl">{winner.emoji}</div>
+                            <h2 className="text-5xl font-black italic uppercase font-palio text-white">{winner.name}</h2>
+                            <p className="mt-2 text-yellow-600 font-bold italic text-lg">{palioType} {year}</p>
+                            <button onClick={() => {
+                                if (palioType === 'Luglio') setPalioType('Agosto');
+                                else { setYear(y => y + 1); setPalioType('Luglio'); }
+                                setWinner(null);
+                                setStep('menu');
+                            }} className="mt-10 py-4 px-10 bg-yellow-600 text-black font-black rounded-full uppercase font-palio">Continua</button>
+                        </div>
+                    )}
+
+                    {step === 'albo' && (
+                        <div className="fixed inset-0 z-50 bg-[#1a0d07] p-6 overflow-y-auto animate-in">
+                            <div className="max-w-md mx-auto">
+                                <h2 className="text-2xl font-palio text-yellow-500 text-center mb-6 uppercase italic">Albo d'Oro</h2>
+                                {alboDOro.length === 0 ? (
+                                    <p className="text-center opacity-40 text-sm italic">In attesa della prima vittoria...</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {alboDOro.map((entry, idx) => (
+                                            <div key={idx} className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/5">
+                                                <div>
+                                                    <span className="text-[8px] text-yellow-600 font-bold uppercase">{entry.type} {entry.year}</span>
+                                                    <div className="text-lg font-black font-palio uppercase">{entry.winner.name}</div>
+                                                </div>
+                                                <div className="text-2xl">{entry.winner.emoji}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <button onClick={() => setStep(winner ? 'race' : 'menu')} className="w-full mt-8 py-4 bg-yellow-600 text-black font-black rounded-xl uppercase font-palio">Torna alla Piazza</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
