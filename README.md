@@ -1,2 +1,0 @@
-# paliosimulato
-Palio simulato
